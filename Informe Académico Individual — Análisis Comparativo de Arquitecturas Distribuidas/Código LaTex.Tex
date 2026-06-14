@@ -1,0 +1,686 @@
+\documentclass[12pt, a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+
+\usepackage[spanish, es-nodecimaldot, es-tabla]{babel}
+
+
+\usepackage[top=2.25cm, bottom=2cm, left=3cm, right=2.5cm]{geometry}
+
+\usepackage[style=ieee, backend=biber, sorting=none, doi=true]{biblatex}
+\addbibresource{referencias.bib}
+
+\usepackage{setspace}
+\onehalfspacing
+\setlength{\parindent}{1.25cm}
+\setlength{\parskip}{2pt}
+
+\usepackage{titlesec}
+\titleformat{\section}{\large\bfseries}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection.}{0.5em}{}
+\titleformat{\subsubsection}{\normalsize\itshape}{\thesubsubsection.}{0.5em}{}
+\titlespacing{\section}{0pt}{14pt}{6pt}
+\titlespacing{\subsection}{0pt}{10pt}{4pt}
+\titlespacing{\subsubsection}{0pt}{8pt}{3pt}
+
+
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{float}
+\usepackage{caption}
+\captionsetup{font=small, labelfont=bf, skip=6pt}
+
+\usepackage[hidelinks, breaklinks=true]{hyperref}
+\usepackage{url}
+\urlstyle{tt}
+
+\usepackage{fancyhdr}
+\fancyhf{}
+\fancyhead[L]{Aplicaciones Distribuidas \textperiodcentered{} UTEQ}
+\fancyhead[R]{\small Cristhian Daniel Pacheco Cárdenas}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\setlength{\headheight}{14pt}
+
+\usepackage[framemethod=default]{mdframed}
+\usepackage{xcolor}
+\definecolor{azulUTEQ}{RGB}{13, 42, 93}
+\definecolor{grisClaro}{RGB}{245, 245, 245}
+\definecolor{azulClaro}{RGB}{232, 240, 254}
+
+\usepackage{enumitem}
+\setlist[itemize]{noitemsep, topsep=3pt, leftmargin=1.4em}
+\setlist[enumerate]{noitemsep, topsep=3pt, leftmargin=1.6em}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+
+\vspace*{0.5cm}
+
+{\large\bfseries Universidad Técnica Estatal de Quevedo}\\[6pt]
+{\normalsize Facultad de Ciencias de la Computación y Diseño Digital}\\[4pt]
+{\normalsize Carrera de Ingeniería en Software}
+
+\vspace{1cm}
+\rule{\linewidth}{1pt}\\[10pt]
+
+{\Large\bfseries
+  Análisis comparativo entre la Arquitectura Orientada
+  a Servicios (SOA) y la Arquitectura de Microservicios:\\[4pt]
+  Justificación de la decisión de diseño en el Sistema\\[4pt]
+  de Gestión de Solicitudes de Soporte Técnico de Internet
+}
+
+\vspace{2pt}
+\rule{\linewidth}{1pt}
+
+\vspace{1.2cm}
+
+{\normalsize
+\textbf{Nombre:} Cristhian Daniel Pacheco Cárdenas\\[4pt]
+  \textbf{Asignatura:} Aplicaciones Distribuidas\\[4pt]
+  \textbf{Tipo de actividad:} Trabajo autónomo individual sumativo\\[4pt]
+  \textbf{Período académico:} Regular 2026--2027 SPA\\[4pt]
+  \textbf{Semestre:} Séptimo Semestre\\[4pt]
+  \textbf{Docente:} Gleiston Cicerón Guerrero Ulloa
+}
+
+\vspace{4.5cm}
+
+{\small Quevedo, Ecuador \textperiodcentered{} 13 de junio de 2026}
+
+\end{titlepage}
+
+
+\pagestyle{fancy}
+
+
+\begin{abstract}
+\noindent
+El presente informe desarrolla un análisis comparativo entre la Arquitectura
+Orientada a Servicios (SOA) y la arquitectura de microservicios, con el objetivo
+de fundamentar la decisión de diseño adoptada en el Proyecto Fin de Curso (PFC):
+el Sistema de Gestión de Solicitudes de Soporte Técnico de Internet. El sistema
+evolucionó desde una arquitectura en tres capas esencialmente monolítica---
+hacia un ecosistema de cinco microservicios desacoplados, comunicados mediante
+REST síncrono y Apache Kafka asíncrono. Se examinan los principios fundacionales
+de cada estilo, sus atributos de calidad bajo el marco ISO/IEC~25010 y las
+condiciones concretas que determinan la aplicabilidad de uno u otro. Los hallazgos
+demuestran que la adopción de microservicios en lugar de SOA responde a tres
+restricciones verificables del proyecto: fronteras de dominio bien delimitadas
+por diseño guiado por el dominio (DDD), disponibilidad de infraestructura de
+contenedores y ausencia de sistemas heterogéneos preexistentes que justifiquen
+un ESB. Se concluye que los microservicios con mensajería orientada a eventos
+satisfacen los requisitos de escalabilidad, tolerancia a fallos y desplegabilidad
+independiente exigidos por el dominio de soporte técnico, mientras que SOA
+habría introducido complejidad sin resolver ningún problema real del sistema.
+
+\medskip
+\noindent\textbf{Palabras clave:} arquitectura distribuida, SOA, microservicios,
+ESB, API Gateway, Apache Kafka, DDD, bounded context, Circuit Breaker, Saga,
+atributos de calidad, soporte técnico.
+\end{abstract}
+
+\newpage
+\tableofcontents
+\newpage
+
+\section{Introducción}
+\label{sec:intro}
+
+El diseño de sistemas distribuidos plantea una de las decisiones más determinantes
+en ingeniería de software: elegir el estilo arquitectónico sobre el que se
+construirá el sistema. Esa decisión no es fácilmente reversible una vez que el
+código existe y el equipo se ha organizado alrededor de un modelo de trabajo.
+Por eso, tomarla con criterios técnicos verificables y no con base en
+tendencias de mercado es una responsabilidad central del arquitecto de software.
+
+El Sistema de Gestión de Solicitudes de Soporte Técnico de Internet denominado
+en adelante \textit{el sistema} o PFC nació como una aplicación web monolítica
+en tres capas. Esta arquitectura inicial tiene ventajas reconocibles: es simple de
+razonar, fácil de depurar y suficiente para un equipo pequeño en fase de exploración
+del dominio. Sin embargo, a medida que el sistema incorpora un componente de
+inteligencia artificial para la clasificación automática de incidencias, notificaciones
+multicanal y reportes analíticos, la arquitectura monolítica se convierte en una
+limitación estructural~\cite{blinowski2022}.
+
+La pregunta que motiva este informe no es si migrar a una arquitectura más
+distribuida esa decisión ya está tomada en el PFC sino cuál de los dos
+estilos candidatos responde mejor a las necesidades concretas del sistema: la
+Arquitectura Orientada a Servicios (SOA) o la arquitectura de microservicios.
+Ambas proponen distribuir la lógica en unidades de negocio autónomas; ambas buscan
+bajo acoplamiento y alta cohesión. Pero difieren profundamente en cómo logran esos
+objetivos y qué precio operativo cobran por ellos~\cite{shadija2017}.
+
+SOA integra servicios a través de un Bus de Servicios Empresariales (ESB) que
+centraliza el enrutamiento, la transformación de mensajes y la orquestación de
+procesos. Los microservicios, en cambio, distribuyen esa responsabilidad: cada
+servicio decide cómo comunicarse con los demás, sin intermediario central, usando
+protocolos ligeros y mensajería asíncrona~\cite{liu2020}. La diferencia parece
+sutil en el papel, pero sus implicaciones operativas son radicales en la práctica.
+
+\subsection{Objetivo general}
+
+Comparar de manera crítica los estilos arquitectónicos SOA y microservicios para
+fundamentar la decisión de diseño adoptada en el Sistema de Gestión de Solicitudes
+de Soporte Técnico de Internet.
+
+\subsection{Objetivos específicos}
+
+\begin{enumerate}
+  \item Caracterizar los principios fundacionales de SOA y microservicios a partir
+        de literatura académica verificada.
+  \item Contrastar ambas arquitecturas en criterios de escalabilidad, despliegue,
+        gestión de datos, comunicación y tolerancia a fallos.
+        \newpage
+  \item Proyectar los hallazgos del análisis sobre el contexto real del PFC,
+        identificando cuál estilo resuelve mejor sus restricciones verificables.
+  \item Reconocer las limitaciones de la arquitectura adoptada y proponer medidas
+        de mitigación concretas.
+\end{enumerate}
+
+\subsection{Alcance}
+
+El análisis cubre los estilos SOA y microservicios en su dimensión de diseño
+lógico. No evalúa infraestructura de red, hardware ni proveedores de nube
+específicos. La proyección al PFC toma como referencia la Entrega~2 del sistema,
+que establece el diseño de arquitectura de microservicios con cinco servicios
+independientes, comunicados mediante REST y Apache Kafka.
+
+
+\section{Marco teórico}
+\label{sec:marco}
+
+
+\subsection{Arquitectura de software de un sistema distribuido}
+
+La arquitectura de software de un sistema distribuido es el conjunto de
+\textbf{decisiones estructurales} que determinan qué componentes existen, qué
+responsabilidad tiene cada uno y cómo se comunican, con independencia del hardware
+donde se ejecuten. Esta concepción distingue dos vistas: la \textit{vista física}
+nodos, redes y protocolos de transporte y la \textit{vista lógica} omponentes, módulos, servicios, contratos e interfaces.
+
+El presente análisis trabaja sobre la vista lógica porque es la que determina las
+propiedades de mantenibilidad, escalabilidad y desplegabilidad. Como señalan
+Shadija, Rezai y Hill~\cite{shadija2017}, la arquitectura lógica de un sistema
+distribuido condiciona directamente sus atributos de calidad bajo el marco
+ISO/IEC~25010: escalabilidad, disponibilidad, tolerancia a fallos y desplegabilidad.
+
+\subsection{El monolito en capas como punto de partida}
+
+Antes de comparar SOA y microservicios, es necesario situar el punto de origen del
+sistema: una arquitectura en tres capas compuesta por una capa de presentación
+la interfaz web, una capa de lógica de negocio validaciones, flujos de
+asignación y gestión de roles y una capa de datos el repositorio relacional
+con toda la información del sistema. Las tres capas se despliegan como una sola
+unidad ejecutable sobre una base de datos compartida.
+
+Las ventajas de este punto de partida son reales: simplicidad inicial, transacciones
+locales con consistencia inmediata, depuración de extremo a extremo sencilla y
+latencia mínima entre capas porque las llamadas ocurren en memoria~\cite{blinowski2022}.
+Sin embargo, a medida que el sistema crece incorporando inteligencia artificial,
+reportes analíticos y notificaciones multicanal el monolito acumula tres problemas
+estructurales: el escalado es en bloque, cualquier cambio requiere redesplegar toda
+la aplicación y la base de datos compartida impide la evolución independiente de
+los módulos.
+
+\subsection{Arquitectura Orientada a Servicios}
+
+SOA es un estilo en el que las capacidades de negocio se exponen como
+\textbf{servicios reutilizables} con contratos formales típicamente WSDL y
+mensajes SOAP integrados a través de un Bus de Servicios Empresariales (ESB).
+El ESB actúa como intermediario central que enruta, transforma y orquesta mensajes
+entre los distintos sistemas de la organización.
+
+Sus principios fundamentales, documentados por Shadija et al.~\cite{shadija2017},
+incluyen: acoplamiento débil entre servicios, contrato de servicio estandarizado,
+abstracción de la implementación, reutilización y autonomía relativa. En la
+práctica, SOA fue adoptado masivamente en entornos empresariales durante la primera
+década del siglo~XXI para resolver el problema de integración entre sistemas
+heterogéneos ERPs, CRMs y aplicaciones legadas sin necesidad de reescribirlos.
+
+El riesgo histórico de SOA reside precisamente en el ESB: al concentrar lógica de
+enrutamiento, transformación de mensajes y orquestación de procesos, el bus se
+convierte en un componente de alta complejidad interna. Cuando el ESB falla o se
+satura, la comunicación de toda la organización se interrumpe de forma simultánea.
+Liu et al.~\cite{liu2020} identifican este punto único de fallo como la razón
+principal por la que SOA fue desplazado por los microservicios en contextos de alta
+disponibilidad.
+
+\subsection{Arquitectura de microservicios}
+
+Los microservicios son, según Shadija et al.~\cite{shadija2017}, una forma
+particular de SOA aplicada al nivel de la aplicación en lugar del nivel empresarial.
+La diferencia fundamental no está en los principios ambos buscan servicios con
+contratos y bajo acoplamiento sino en la granularidad, el mecanismo de integración
+y la cultura de equipo requerida.
+
+Liu et al.~\cite{liu2020} definen la arquitectura de microservicios como un
+paradigma que descompone una aplicación en \textbf{unidades funcionales pequeñas
+e independientes}, cada una responsable de una capacidad de negocio concreta,
+ejecutándose en su propio proceso y comunicándose mediante mecanismos ligeros.
+Sus propiedades clave son: modelado alrededor de una capacidad de negocio no de
+una capa técnica, despliegue independiente, datos descentralizados con cada
+servicio como propietario exclusivo de su base de datos, y tolerancia a fallos
+mediante aislamiento de procesos.
+
+Blinowski et al.~\cite{blinowski2022} advierten que los microservicios eliminan el
+ESB central distribuyendo la inteligencia de comunicación en los propios servicios,
+lo que reduce el acoplamiento estructural al precio de incrementar la complejidad
+operativa: los equipos deben gestionar observabilidad distribuida, descubrimiento
+de servicios, resiliencia de red y consistencia eventual. Esta advertencia es
+directamente relevante para el PFC: adoptar microservicios sin infraestructura
+de contenedores equivale a crear un \textit{monolito distribuido} lo peor de
+ambos mundos.
+
+\subsection{La Arquitectura Orientada a Eventos como patrón complementario}
+
+La Arquitectura Orientada a Eventos (EDA) actúa como complemento natural de los
+microservicios. El productor publica un evento en un intermediario de mensajes
+(\textit{broker}) como Apache Kafka y continúa trabajando sin esperar respuesta.
+Los consumidores se suscriben y reaccionan al evento a su propio ritmo, produciendo
+un desacoplamiento temporal entre servicios.
+
+Rahmatulloh et al.~\cite{rahmatulloh2022} demuestran empíricamente que integrar
+EDA dentro de una arquitectura de microservicios mejora el tiempo de respuesta en
+un 19{,}18\,\% y reduce la tasa de error en un 34{,}40\,\% frente a la
+comunicación HTTP síncrona, si bien incrementa el uso de CPU en un 8{,}52\,\%.
+Este hallazgo es directamente aplicable al PFC, donde Kafka conecta de forma
+asíncrona el servicio de tickets con el de inteligencia artificial y el de
+notificaciones, permitiendo que el cliente reciba el identificador del ticket de
+forma inmediata sin esperar a que la IA complete la clasificación.
+
+El estudio de caso de Laigner et al.~\cite{laigner2020} migración real de un
+sistema monolítico de Big Data a microservicios con EDA confirma que este patrón
+facilita el mantenimiento y el aislamiento de fallos en sistemas con múltiples
+actores y flujos de trabajo complejos, que es exactamente el escenario del PFC.
+
+% ============================================================
+\section{Análisis comparativo: SOA vs.\ microservicios}
+\label{sec:analisis}
+% ============================================================
+
+\subsection{Criterios de comparación}
+
+El análisis se estructura en torno a seis dimensiones técnicas extraídas de la
+literatura revisada y alineadas con los atributos de calidad ISO/IEC~25010:
+unidad de despliegue, escalabilidad, gestión de datos, modelo de comunicación, tolerancia a fallos y complejidad operativa.
+
+\subsection{Unidad de despliegue}
+
+En SOA, la unidad de despliegue es el servicio empresarial, un componente de
+tamaño mediano o grande que depende del ESB para ser invocado. Actualizar un
+servicio implica coordinar su nueva versión con el bus y verificar compatibilidad
+con todos sus consumidores registrados, lo que frena la velocidad de entrega.
+
+En microservicios, cada unidad de despliegue es un proceso independiente. Esto
+permite publicar cambios en el servicio de notificaciones sin detener ni modificar
+el servicio de tickets ni el de autenticación. Laigner et al.~\cite{laigner2020}
+confirman esta ventaja en un estudio de caso real: la migración a microservicios
+con EDA facilitó el mantenimiento y el aislamiento de fallos de manera notable,
+aunque la diversidad tecnológica incorporada fue identificada como una desventaja
+operativa concreta.
+
+\subsection{Escalabilidad}
+
+SOA permite escalar servicios individuales, pero el ESB actúa como limitante: si
+el bus se satura, la capacidad de los servicios independientes queda subutilizada.
+Los microservicios permiten lo que Blinowski et al.~\cite{blinowski2022} denominan
+\textit{escalado fino}: solo el servicio saturado se replica, sin necesidad de
+escalar el sistema completo.
+
+No obstante, los mismos autores formulan una advertencia crítica: para sistemas
+que no manejan miles de usuarios concurrentes, los beneficios del escalado en
+microservicios no han sido investigados con rigor suficiente y la evidencia
+disponible es inconsistente~\cite{blinowski2022}. Adoptar microservicios en un
+sistema de tráfico moderado puede resultar en mayor complejidad operativa sin
+ningún beneficio real de rendimiento, advertencia que el equipo del PFC debe
+tener presente durante la fase de implementación.
+
+\subsection{Gestión de datos}
+
+Esta dimensión representa la diferencia más profunda entre ambos estilos. En SOA,
+la práctica habitual consiste en compartir una base de datos centralizada entre
+múltiples servicios, lo que simplifica las consultas cruzadas mediante sentencias
+\texttt{JOIN} pero genera acoplamiento de datos que impide la evolución independiente.
+
+En microservicios, el patrón \textit{Database per Service} es un principio
+fundacional: cada servicio es propietario exclusivo de sus datos y ningún otro
+puede consultarlos directamente. Los \texttt{JOIN} entre servicios deben
+reemplazarse por composición de llamadas REST o eventos. Para gestionar
+transacciones distribuidas se emplean los patrones CQRS Segregación de
+Responsabilidad entre Comandos y Consultas y Saga secuencia de transacciones
+locales con compensaciones ante fallo.
+
+\subsection{Modelo de comunicación}
+
+SOA utiliza predominantemente protocolos pesados: SOAP sobre HTTP con mensajes XML
+y contratos WSDL. La transformación y el enrutamiento de mensajes ocurren dentro
+del ESB, lo que introduce latencia adicional y rigidez contractual.
+
+Los microservicios favorecen protocolos ligeros: REST sobre HTTP para APIs públicas,
+gRPC para comunicación interna de alta frecuencia, y mensajería asíncrona para
+eventos y notificaciones. Liu et al.~\cite{liu2020} consolidan la regla práctica
+de la industria: REST hacia afuera, gRPC o mensajería hacia adentro, y eventos
+para todo aquello que pueda tolerar latencia.
+\newpage
+\subsection{Tolerancia a fallos}
+
+En SOA, el ESB constituye un punto único de fallo de alto impacto: si el bus cae,
+todos los servicios pierden su canal de comunicación simultáneamente. En
+microservicios, la tolerancia a fallos se construye mediante patrones específicos:
+\textit{circuit breaker} cortacircuito que deja de enviar peticiones a un
+servicio degradado, reintentos con retroceso exponencial y tiempos de espera
+explícitos. El fallo de un servicio se manifiesta como degradación controlada del
+sistema en lugar de un colapso general.
+
+\subsection{Complejidad operativa}
+
+SOA presenta complejidad centralizada en el ESB: configuración de rutas, políticas
+de transformación y gobierno de servicios. Los microservicios presentan complejidad
+alta y distribuida: contenedores, observabilidad, descubrimiento de servicios y
+CI/CD. Liu et al.~\cite{liu2020} identifican la depuración entre servicios, la
+latencia acumulada y la consistencia de datos distribuidos como los desafíos más
+críticos en producción.
+
+\subsection{Síntesis comparativa}
+
+La Tabla~\ref{tab:comparativa} consolida los resultados del análisis.
+
+\begin{table}[H]
+\centering
+\caption{Comparativa técnica entre SOA y microservicios}
+\label{tab:comparativa}
+\begin{tabular}{>{\bfseries}p{3.0cm} p{5.0cm} p{5.0cm}}
+\toprule
+\textbf{Criterio} & \textbf{SOA} & \textbf{Microservicios} \\
+\midrule
+Unidad de despliegue
+  & Servicio grande coordinado con el ESB
+  & Proceso pequeño e independiente \\
+\addlinespace
+Escalabilidad
+  & Por servicio, limitada por el ESB
+  & Granular: solo el servicio saturado \\
+\addlinespace
+Gestión de datos
+  & Base de datos frecuentemente compartida
+  & Una base por servicio (\textit{Database per Service}) \\
+\addlinespace
+Comunicación
+  & SOAP/XML enrutado por el ESB
+  & REST, gRPC, mensajería asíncrona \\
+\addlinespace
+Tolerancia a fallos
+  & ESB como punto único de fallo
+  & Aislamiento por servicio (\textit{circuit breaker}) \\
+\addlinespace
+Complejidad operativa
+  & Alta, centralizada en el ESB
+  & Alta, distribuida: contenedores, CI/CD, observabilidad \\
+\addlinespace
+Contexto adecuado
+  & Integración de sistemas heterogéneos empresariales preexistentes
+  & Equipos autónomos, dominio maduro, despliegue frecuente \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Análisis crítico}
+
+La Tabla~\ref{tab:comparativa} revela que SOA y microservicios son respuestas a
+problemas distintos en escalas distintas. SOA resuelve la \textit{interoperabilidad
+empresarial}: cómo hacer que sistemas heterogéneos escritos décadas antes intercambien
+información sin reescribirlos. Los microservicios resuelven la \textit{velocidad de
+entrega y escalabilidad autónoma}: cómo permitir que equipos independientes
+desplieguen y escalen sus componentes sin coordinación central.
+
+Un error conceptual frecuente es evaluar los microservicios como una versión
+mejorada de SOA. Shadija et al.~\cite{shadija2017} aclaran que los microservicios
+son SOA aplicado al nivel de la aplicación. La diferencia no está en los principios
+sino en la granularidad, el mecanismo de integración y la cultura de equipo: SOA
+centraliza la inteligencia en el bus, los microservicios la distribuyen en los
+propios servicios.
+
+La limitación más crítica de los microservicios, señalada con rigor por Blinowski
+et al.~\cite{blinowski2022}, es que para sistemas de escala moderada la complejidad
+operativa puede superar los beneficios. Un equipo que implementa microservicios sin
+contenedores ni observabilidad no obtiene despliegue independiente: obtiene un
+sistema distribuido frágil y costoso de mantener. Este riesgo es concreto en
+proyectos académicos de equipos de cuatro personas y debe gestionarse con disciplina.
+
+SOA, por su parte, tiene una limitación estructural igualmente seria: el ESB
+concentra inteligencia en una capa que no pertenece a ningún dominio de negocio,
+y cuando falla, toda la organización lo siente al mismo tiempo. Esa fragilidad fue,
+históricamente, la razón que motivó el surgimiento de los microservicios.
+
+\section{Aplicación al Proyecto Fin de Curso}
+\label{sec:pfc}
+
+
+\subsection{Descripción del sistema}
+
+El Sistema de Gestión de Solicitudes de Soporte Técnico de Internet es una
+plataforma web orientada a formalizar el proceso de atención de incidencias
+relacionadas con la conectividad dentro de entornos organizacionales. El sistema
+opera mediante un esquema de acceso restringido por roles: el \textit{cliente}
+registra solicitudes y realiza seguimiento; el \textit{técnico} atiende los casos
+asignados; el \textit{administrador} supervisa el sistema y asigna técnicos; el
+\textit{superusuario} gestiona cuentas y perfiles.
+
+El dominio central es el ciclo de vida completo de un ticket: desde que el cliente
+reporta una incidencia pérdida de conexión, degradación de velocidad, fallo de
+hardware de red hasta la resolución confirmada y el cierre formal, pasando por
+la asignación a técnicos, el registro de trámites, las notificaciones de estado y
+el análisis inteligente de patrones de falla.
+\newpage
+El proyecto es desarrollado por un equipo de cuatro personas con roles definidos:
+arquitecto responsable del diseño distribuido, líder de desarrollo responsable de
+la implementación de los servicios críticos, responsable de calidad a cargo de las
+pruebas de integración y responsable de documentación.
+
+\subsection{Evolución arquitectónica: del monolito a los microservicios}
+
+La versión inicial del sistema se construyó sobre una arquitectura en tres capas:
+capa de presentación, capa de lógica de negocio y capa de datos. Esta arquitectura,
+apropiada para la fase de exploración del dominio, presentó limitaciones concretas
+a medida que el sistema incorporó capacidades adicionales:
+
+\begin{itemize}
+  \item El componente de inteligencia artificial para clasificación automática de
+        tickets requiere un proceso independiente con dependencias Python,
+        incompatibles con el entorno Java del sistema principal.
+  \item El servicio de notificaciones multicanal debe poder desplegarse y escalarse
+        de forma independiente, ya que su latencia no debe bloquear la creación
+        de solicitudes por parte del cliente.
+  \item El módulo de reportes analíticos necesita un modelo de datos desnormalizado
+        para consultas complejas, incompatible con la base de datos operacional
+        compartida.
+\end{itemize}
+
+Estas tres necesidades concretas no una tendencia tecnológica justificaron
+la migración a microservicios en la Entrega~2 del PFC.
+
+\subsection{Identificación de bounded contexts mediante DDD}
+
+La descomposición en microservicios siguió los principios del Diseño Guiado por
+el Dominio (DDD). Se identificaron cinco \textit{bounded contexts} diferenciados
+por su responsabilidad:
+
+\begin{itemize}
+  \item \textbf{BC-1: Autenticación y Autorización.} Gestiona la identidad de
+        todos los actores, emite y valida tokens JWT y controla permisos basados
+        en roles (RBAC). Actúa como proveedor de identidad para todos los demás.
+  \item \textbf{BC-2: Gestión de Tickets.} Centraliza el ciclo de vida completo
+        de una solicitud de soporte. Es el núcleo del dominio (\textit{core domain}).
+  \item \textbf{BC-3: Notificaciones.} Consume eventos del bus de mensajes y
+        distribuye notificaciones según el canal configurado.
+  \item \textbf{BC-4: Inteligencia Artificial.} Clasifica automáticamente las
+        incidencias, estima prioridad y sugiere técnicos basándose en historial.
+  \item \textbf{BC-5: Reportes y Análisis.} Construye y expone métricas operativas:
+        tiempo promedio de resolución, cumplimiento de SLA y volumen de incidencias.
+\end{itemize}
+
+\subsection{Catálogo de microservicios adoptados}
+
+La Tabla~\ref{tab:microservicios} describe el catálogo completo de microservicios
+del sistema resultante de la migración.
+
+\begin{table}[H]
+\centering
+\caption{Microservicios del Sistema de Gestión de Soporte Técnico}
+\label{tab:microservicios}
+\begin{tabular}{>{\ttfamily}p{4.5cm} p{1.5cm} p{3.25cm} p{5.5cm}}
+\toprule
+\textbf{Servicio} & \textbf{Puerto} & \textbf{Base de datos} & \textbf{Responsabilidad principal} \\
+\midrule
+auth-service         & 8001 & PostgreSQL & Registro, login, JWT y RBAC \\
+ticket-service       & 8002 & PostgreSQL & CRUD de tickets, estados, asignaciones y SLA \\
+notification-service & 8003 & MongoDB    & Consumo de eventos Kafka, despacho multicanal \\
+ai-service           & 8004 & MongoDB    & Clasificación NLP, priorización y sugerencias \\
+report-service       & 8005 & PostgreSQL & Modelo CQRS de lectura, métricas y exportación \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+El API Gateway (Spring Cloud Gateway, puerto~8080) actúa como punto único de
+entrada para todos los clientes externos: enruta peticiones, verifica tokens JWT
+delegando al \texttt{auth-service}, aplica límites de tasa y centraliza el
+registro de accesos. Apache Kafka opera como bus de mensajes asíncrono para los
+eventos de dominio entre servicios.
+
+\subsection{Patrones de microservicios aplicados}
+
+El sistema implementa tres patrones que responden a desafíos concretos del dominio:
+
+\textbf{CQRS:} El \texttt{ticket-service} recibe un alto volumen de escrituras
+pero el \newline {report-service} necesita consultas complejas con agregaciones que
+penalizarían la base de datos operacional. La solución separa el modelo de escritura
+del modelo de lectura: el ticket-service actualiza su propia base de datos;
+el report-service mantiene una base de datos desnormalizada que se actualiza
+escuchando los eventos Kafka del \texttt{ticket-service}.
+
+\textbf{Saga por coreografía.} La creación de un ticket involucra múltiples
+servicios en cadena. El ticket-service crea el registro en estado
+\texttt{PENDIENTE\_CLASIFICACION} y publica \texttt{ticket.created}; el
+\texttt{ai-service} clasifica la incidencia y publica \texttt{ticket.classified};
+el \texttt{ticket-service} actualiza categoría y prioridad y publica
+\texttt{ticket.ready}; el \newline {notification-service} envía la confirmación al
+cliente. Si la clasificación falla, el \texttt{ai-service} publica un evento de
+compensación y el ticket queda en estado de error, sin afectar a los demás
+servicios. 
+
+\newpage
+Este flujo implementa exactamente el desacoplamiento temporal que
+Rahmatulloh et al.~\cite{rahmatulloh2022} demuestran que mejora el rendimiento y
+reduce la tasa de errores.
+
+\textbf{Circuit Breaker:} Si el \texttt{ticket-service} se degrada, el API Gateway
+acumularía peticiones en espera hasta agotar su pool de hilos, dejando inoperables
+incluso las rutas de autenticación. El Circuit Breaker implementado con Resilience4j
+abre el circuito al superar el 50\,\% de tasa de fallo en las últimas diez
+peticiones y devuelve inmediatamente una respuesta controlada sin propagar el
+timeout al cliente mientras los demás microservicios continúan operando.
+
+\subsection{Por qué no SOA: justificación técnica}
+
+El rechazo de SOA como alternativa se fundamenta en tres razones técnicas
+verificables derivadas del análisis de la Sección~\ref{sec:analisis}:
+
+\textbf{Primera:} el sistema se construye desde cero con tecnología seleccionada
+por el equipo. No existe ningún sistema legado heterogéneo que requiera un ESB
+para integrarse. Introducir un ESB en este contexto equivale a crear artificialmente
+el problema que SOA fue diseñado para resolver.
+
+\textbf{Segunda:} un ESB centralizado contradice el requisito de disponibilidad
+del sistema de soporte. Si el bus falla, la comunicación de todos los servicios
+se interrumpe simultáneamente. La arquitectura de microservicios con Kafka y
+Circuit Breaker garantiza que el fallo de un servicio incluso el de inteligencia
+artificial se degrada de forma controlada sin colapsar el sistema completo.
+
+\textbf{Tercera:} los cinco bounded contexts identificados mediante DDD tienen
+fronteras suficientemente claras como para justificar servicios autónomos. No
+existe coordinación constante entre ellos que requiera un orquestador central.
+
+\subsection{Limitaciones reconocidas y medidas de mitigación}
+
+El equipo reconoce tres limitaciones técnicas concretas:
+
+\begin{enumerate}
+  \item \textbf{Consistencia eventual.} Las operaciones que involucran más de un
+        servicio no pueden garantizar consistencia inmediata. El patrón Saga mitiga
+        este problema, pero introduce lógica de compensación que debe diseñarse y
+        probarse con cuidado. Laigner et al.~\cite{laigner2020} confirman que este
+        costo fue uno de los más significativos en su migración real. El equipo
+        debe documentar los estados transitorios aceptables y los tiempos máximos
+        de propagación de cada evento.
+\newpage
+  \item \textbf{Complejidad de depuración distribuida.} Los errores que atraviesan
+        múltiples servicios son más difíciles de rastrear que en un monolito. Como
+        mitigación, el equipo debe incorporar identificadores de correlación en los
+        encabezados HTTP y en los metadatos de cada evento Kafka, siguiendo la
+        recomendación de Liu et al.~\cite{liu2020}, de modo que los logs de los
+        cinco servicios puedan correlacionarse durante la depuración.
+
+  \item \textbf{Carga operativa por diversidad tecnológica.} El sistema integra
+        Spring Boot (Java), Node.js y FastAPI (Python), con bases de datos
+        PostgreSQL y MongoDB. Esta heterogeneidad es una ventaja arquitectónica
+        cada servicio usa la tecnología más adecuada pero una carga real
+        para un equipo de cuatro personas. Laigner et al.~\cite{laigner2020}
+        documentaron exactamente este trade-off en su caso de estudio.
+\end{enumerate}
+
+\section{Conclusiones}
+\label{sec:conclusiones}
+
+El análisis comparativo entre SOA y microservicios confirma que ninguno de los
+dos estilos es universalmente superior: son respuestas a problemas distintos en
+contextos distintos. SOA resuelve la interoperabilidad entre sistemas heterogéneos
+preexistentes mediante contratos formales y un bus de orquestación; los
+microservicios resuelven la velocidad de entrega y la escalabilidad granular
+mediante servicios autónomos y comunicación ligera.
+
+Para el Sistema de Gestión de Solicitudes de Soporte Técnico de Internet, la
+elección de microservicios es la correcta por tres razones verificables: el
+dominio tiene cinco fronteras de negocio limpias identificadas mediante DDD, la
+infraestructura de contenedores está disponible con Docker y Docker Compose, y no
+existe ningún sistema legado que requiera un ESB para integrarse. SOA habría
+introducido complejidad de configuración sin resolver ningún problema real del PFC.
+
+Sin embargo, el equipo debe asumir conscientemente los costos de la decisión:
+consistencia eventual en operaciones distribuidas, complejidad de depuración entre
+servicios y carga operativa de mantener múltiples pilas tecnológicas. Estos costos
+no son argumentos en contra de la arquitectura adoptada; son restricciones de diseño
+que deben gestionarse desde las primeras iteraciones con patrones específicos Saga,
+identificadores de correlación, builds multi-stage y no descubrir en producción.
+
+La enseñanza más importante del análisis, respaldada por Blinowski
+et al.~\cite{blinowski2022}, es que los beneficios de los microservicios no son
+automáticos. Solo se materializan cuando el equipo tiene la disciplina operativa
+necesaria y el dominio tiene las fronteras claras que permiten que la autonomía de
+los servicios sea real. En el PFC, ambas condiciones están presentes. En sistemas
+donde no lo están, el monolito modular sigue siendo la decisión más honesta.
+
+
+\section*{Repositorio en GitHub}
+
+El código en LaTex de este documento se encuentra disponible en:
+\newline
+\url{https://github.com/CristhianP03/Proyecto-Grupal-App-Distribuidas-EquipoACC/edit/main/PFC%20Entrega%202/Arquitectura%20de%20Microservicios%2C%20API%20REST%20y%20Contenerizaci%C3%B3n%20con%20Docker.TeX}
+
+\section*{Rol de la Inteligencia Artificial}
+Durante la elaboración de este informe se utilizó una herramienta de
+inteligencia artificial como apoyo en la redacción. Su participación se limitó
+a correcciones menores de texto y estructura, como mejorar la redacción de
+algunos párrafos, reorganizar el orden de ciertas explicaciones y unificar
+el estilo del documento.
+
+\clearpage
+
+\printbibliography[title={Referencias bibliográficas}]
+
+\end{document}
